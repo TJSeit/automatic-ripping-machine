@@ -1,6 +1,15 @@
 # Changelog
 
 
+## Current Development
+  - Added queue ordering system for transcode jobs
+    - New `QUEUE_ORDER` configuration option in arm.yaml (values: "fifo" or "lifo")
+    - Jobs now track their queue position with a timestamp when entering transcode wait state
+    - FIFO (First In, First Out) mode processes oldest jobs first (recommended for most users)
+    - LIFO (Last In, First Out) mode processes newest jobs first
+    - UI now displays jobs in queue order based on the configured setting
+    - Fixes issue where jobs were processed in random order due to race conditions
+
 ## Current pre-release v2.5.0
   - Only one large item for this version.
 
