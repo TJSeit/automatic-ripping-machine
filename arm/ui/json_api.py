@@ -41,6 +41,14 @@ def get_x_jobs(job_status):
     success = False
     if job_status == "joblist":
         jobs = db.session.query(Job).filter(~Job.finished).all()
+        # Sort jobs by queue_position based on QUEUE_ORDER config
+        queue_order = cfg.arm_config.get("QUEUE_ORDER", "fifo").lower()
+        if queue_order == "lifo":
+            # Last In, First Out - newest jobs first (descending order)
+            jobs = sorted(jobs, key=lambda x: x.queue_position if x.queue_position else datetime.datetime.min, reverse=True)
+        else:
+            # First In, First Out - oldest jobs first (ascending order, default)
+            jobs = sorted(jobs, key=lambda x: x.queue_position if x.queue_position else datetime.datetime.max)
     elif JobState(job_status) in JOB_STATUS_FINISHED:
         jobs = Job.query.filter_by(status=job_status)
     else:

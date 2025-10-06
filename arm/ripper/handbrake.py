@@ -23,9 +23,14 @@ def handbrake_sleep_check(job):
     drive associated to the job is ejected at this point.
     """
     logging.debug("Handbrake starting.")
-    utils.database_updater({"status": JobState.TRANSCODE_WAITING.value}, job)
+    from datetime import datetime
+    # Set queue position and status when entering the transcode queue
+    utils.database_updater({
+        "status": JobState.TRANSCODE_WAITING.value,
+        "queue_position": datetime.now()
+    }, job)
     # TODO: send a notification that jobs are waiting ?
-    utils.sleep_check_process("HandBrakeCLI", int(cfg.arm_config["MAX_CONCURRENT_TRANSCODES"]))
+    utils.sleep_check_process("HandBrakeCLI", int(cfg.arm_config["MAX_CONCURRENT_TRANSCODES"]), job=job)
     logging.debug(f"Setting job status to '{JobState.TRANSCODE_ACTIVE.value}'")
     utils.database_updater({"status": JobState.TRANSCODE_ACTIVE.value}, job)
 

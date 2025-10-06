@@ -122,12 +122,13 @@ def notify_entry(job):
         sys.exit()
 
 
-def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
+def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10), job=None):
     """
     New function to check for max_transcode from job.config and force obey limits\n
     :param str process_str: The process string from arm.yaml
     :param int max_processes: The user defined limit for maximum transcodes
     :param (tuple, int) sleep: tuple: (min sleep time, max sleep time, step) or sleep time as int.
+    :param job: Current job (optional, used for queue ordering)
     :return bool: when we have space in the transcode queue
     """
     if max_processes <= 0:
@@ -146,6 +147,12 @@ def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
             if proc.info.get('name') == process_str
         )
         if max_processes > loop_count:
+            # Check if this job is next in the queue
+            if job and not is_next_in_queue(job):
+                logging.debug(f"Job {job.job_id} is not next in queue, continuing to wait")
+                time.sleep(5)  # Use a fixed 5 second sleep for queue position checks
+                loop_count = max_processes + 1  # Force loop to continue
+                continue
             break
         # Try to make each check at different times
         random_time = random.randrange(*sleep)
@@ -153,6 +160,38 @@ def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
         time.sleep(random_time)
     logging.info(f"Exiting sleep check of {process_str}")
     return True
+
+
+def is_next_in_queue(current_job):
+    """
+    Check if the current job is next in the transcode queue based on QUEUE_ORDER setting
+    
+    :param current_job: The job to check
+    :return bool: True if this job should proceed, False if it should wait
+    """
+    # Get the queue order configuration
+    queue_order = cfg.arm_config.get("QUEUE_ORDER", "fifo").lower()
+    
+    # Get all jobs waiting for transcode
+    waiting_jobs = Job.query.filter_by(status=JobState.TRANSCODE_WAITING.value).all()
+    
+    # If only this job is waiting, it's next
+    if len(waiting_jobs) <= 1:
+        return True
+    
+    # Sort jobs by queue_position based on the configured order
+    if queue_order == "lifo":
+        # Last In, First Out - newest jobs first (descending order)
+        waiting_jobs.sort(key=lambda x: x.queue_position if x.queue_position else datetime.datetime.min, reverse=True)
+    else:
+        # First In, First Out - oldest jobs first (ascending order, default)
+        waiting_jobs.sort(key=lambda x: x.queue_position if x.queue_position else datetime.datetime.max)
+    
+    # Check if current job is first in the sorted list
+    if waiting_jobs and waiting_jobs[0].job_id == current_job.job_id:
+        return True
+    
+    return False
 
 
 def convert_job_type(video_type):
