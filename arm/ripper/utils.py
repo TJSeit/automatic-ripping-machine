@@ -616,6 +616,8 @@ def database_updater(args, job, wait_time=90):
     for i in range(wait_time):  # give up after the users wait period in seconds
         try:
             db.session.commit()
+            logging.debug("successfully written to the database")
+            return True
         except Exception as error:
             if "locked" in str(error):
                 time.sleep(1)
@@ -623,8 +625,9 @@ def database_updater(args, job, wait_time=90):
             else:
                 logging.debug(f"Error: {error}")
                 raise RuntimeError(str(error)) from error
-    logging.debug("successfully written to the database")
-    return True
+    logging.error(f"Failed to update database after {wait_time} attempts - database remained locked")
+    db.session.rollback()
+    return False
 
 
 def database_adder(obj_class):
@@ -639,7 +642,8 @@ def database_adder(obj_class):
             logging.debug(f"Trying to add {type(obj_class).__name__}")
             db.session.add(obj_class)
             db.session.commit()
-            break
+            logging.debug(f"successfully written {type(obj_class).__name__} to the database")
+            return True
         except Exception as error:
             if "locked" in str(error):
                 time.sleep(1)
@@ -647,8 +651,9 @@ def database_adder(obj_class):
             else:
                 logging.error(f"Error: {error}")
                 raise RuntimeError(str(error)) from error
-    logging.debug(f"successfully written {type(obj_class).__name__} to the database")
-    return True
+    logging.error(f"Failed to add {type(obj_class).__name__} to database after 90 attempts - database remained locked")
+    db.session.rollback()
+    return False
 
 
 def clean_old_jobs():
